@@ -1,0 +1,119 @@
+---
+title: "Practical Machine Learning Course Project: Human Activity Recognition"
+author: "Aditya Vikram"
+date: "1/17/2018"
+output: html_document
+---
+##Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement, a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of this project is to predict the manner in which they did the exercise.
+
+##Loading the data
+```{r}
+#Load the necessary libraries
+library(caret)
+
+#Read the data files into R and replace empty/missing values by NA
+train<- read.csv("pml-training.csv", sep=",", header=TRUE, na.strings = c("NA","",'#DIV/0!'))
+test<- read.csv("pml-testing.csv", sep=",", header=TRUE, na.strings = c("NA","",'#DIV/0!'))
+```
+
+```{r}
+#Checking dimensions of the datasets
+dim(train)
+dim(test)
+```
+
+##Cleaning of data
+We remove the variables with missing values.
+```{r}
+train <- train[,(colSums(is.na(train)) == 0)]
+dim(train)
+test <- test[,(colSums(is.na(test)) == 0)]
+dim(test)
+```
+Now, our data sets have 60 variables.
+
+##Prepocess the data
+```{r}
+numerical <- which(lapply(train, class) %in% "numeric")
+preprocessModel <-preProcess(train[,numerical],method=c('knnImpute', 'center', 'scale'))
+pre_train <- predict(preprocessModel, train[,numerical])
+pre_train$classe <- train$classe
+pre_test <-predict(preprocessModel,test[,numerical])
+```
+
+##Removing variables with values near zero
+Removing the variables with values near zero as they don't have any significance in predictions.
+```{r}
+nzv <- nearZeroVar(pre_train,saveMetrics=TRUE)
+pre_train <- pre_train[,nzv$nzv==FALSE]
+
+nzv <- nearZeroVar(pre_test,saveMetrics=TRUE)
+pre_test <- pre_test[,nzv$nzv==FALSE]
+```
+
+##Validation set
+We want a 75% observation training dataset to train our model. We will then validate it on the last 70%.
+```{r}
+set.seed(100)
+sample <- createDataPartition(pre_train$classe, p=0.75, list=FALSE)
+training <- pre_train[sample, ]
+validation <- pre_train[-sample, ]
+dim(training)
+dim(validation)
+```
+
+##Training the model
+We train a model using random forest with a cross validation of 5 folds to avoid overfitting.
+```{r simulation, results="hide"}
+library(randomForest)
+```
+
+```{r}
+set.seed(100)
+rfmodel <- randomForest(classe ~., method="rf", data=training, trControl=trainControl(method="cv", number=5))
+rfmodel
+```
+
+#Cross Validation and Out-of-Sample Error Estimate
+Let's apply our training model on our testing database to check its accuracy.
+
+##Accuracy and Estimated out of sample error
+```{r}
+predictions <- predict(rfmodel, validation)
+confusionmatrix <- confusionMatrix(validation$classe, predictions)
+confusionmatrix$table
+```
+
+We can notice that there are very few variables out of this model.
+```{r}
+accuracy <- postResample(validation$classe, predictions)
+modelAccuracy <- accuracy[[1]]
+modelAccuracy
+out_of_sample_error <- 1 - modelAccuracy
+out_of_sample_error
+```
+The estimated accuracy of the model is 99.35% and the estimated out-of-sample error based on our fitted model applied to the cross validation dataset is 0.65%.
+
+##Application of this model on the test data set
+We have already cleaned the test data set.
+```{r}
+finalpred <- predict(rfmodel, pre_test)
+finalpred
+```
+
+##Plots and figures
+Decision tree
+```{r}
+library(rpart)
+library(rpart.plot)
+treeModel <- rpart(classe ~ ., data=train, method="class")
+prp(treeModel)
+```
+
+
+
+
+
+
